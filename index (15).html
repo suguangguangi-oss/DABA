@@ -1,0 +1,685 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>角鋼貨架計算機</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg:#f4f3ef; --surface:#fff; --border:rgba(0,0,0,.10);
+  --text:#1a1a18; --muted:#777;
+  --am:#F5A623; --te:#5DCAA5; --re:#111111;
+  --pu:#7F77DD; --na:#1A237E; --pi:#C2185B;
+  --yb:#fffde6; --ybd:#e0b800;
+}
+html, body { height:100%; overflow:hidden; }
+body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  background:var(--bg); color:var(--text);
+  display:flex; flex-direction:column;
+  padding:10px 12px; height:100vh; }
+h1 { font-size:14px; font-weight:500; margin-bottom:8px; flex-shrink:0; }
+.layout { display:grid; grid-template-columns:1fr 1fr; gap:12px; flex:1; min-height:0; align-items:stretch; }
+
+/* LEFT: scrollable if needed but compact enough to fit */
+.left-col { display:flex; flex-direction:column; gap:5px; min-height:0; overflow:hidden; }
+
+.panel { background:var(--surface); border:0.5px solid var(--border); border-radius:8px; padding:8px 10px; flex-shrink:0; }
+.panel-results { flex-shrink:0; }
+.gt { font-size:9px; font-weight:600; color:var(--muted); letter-spacing:.07em; text-transform:uppercase; margin-bottom:6px; }
+.ig  { display:grid; grid-template-columns:1fr 1fr 1fr; gap:5px 8px; }
+.ig2 { display:grid; grid-template-columns:1fr 1fr;     gap:5px 8px; }
+.field { display:flex; flex-direction:column; gap:2px; }
+.field label { font-size:10px; color:var(--muted); display:flex; align-items:center; gap:4px; }
+.dot { display:inline-block; width:7px; height:7px; border-radius:50%; flex-shrink:0; }
+input[type=number] { width:100%; font-size:12px; padding:3px 6px;
+  border:0.5px solid rgba(0,0,0,.18); border-radius:5px;
+  background:var(--surface); color:var(--text); outline:none;
+  -moz-appearance:textfield; transition:border-color .15s; }
+input[type=number]:focus { border-color:rgba(0,0,0,.4); }
+input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer-spin-button { -webkit-appearance:none; }
+.rg { display:grid; grid-template-columns:1fr 1fr; gap:4px; }
+.rr { display:flex; justify-content:space-between; align-items:baseline;
+  padding:3px 6px; border-radius:5px;
+  background:#f7f6f2; border:0.5px solid rgba(0,0,0,.06); }
+.rr.y    { background:var(--yb); border-color:var(--ybd); }
+.rr.span { grid-column:1/-1; }
+.rr.big  { padding:5px 8px; border-width:1px; }
+.rl { font-size:10px; color:var(--muted); }
+.rv { font-size:11px; font-weight:500; }
+.rr.big .rl { font-size:11px; font-weight:500; color:#7a6000; }
+.rr.big .rv { font-size:15px; font-weight:600; color:#7a6000; }
+
+/* RIGHT: SVG fills full height */
+.svg-wrap {
+  background:var(--surface); border:0.5px solid var(--border); border-radius:8px;
+  padding:10px; user-select:none;
+  display:flex; flex-direction:column;
+  min-height:0; overflow:hidden;
+}
+.svg-wrap svg.main { flex:1; width:100%; display:block; min-height:0; }
+svg.main { display:block; width:100%; cursor:default; }
+.hint { font-size:9px; color:var(--muted); margin-top:6px; line-height:1.5; flex-shrink:0; }
+.legend { display:flex; flex-wrap:wrap; gap:4px 12px; margin-top:6px; padding-top:6px; border-top:0.5px solid var(--border); flex-shrink:0; }
+.li { display:flex; align-items:center; gap:5px; font-size:9px; color:var(--muted); }
+@media(max-width:720px){ .layout{ grid-template-columns:1fr; } }
+</style>
+</head>
+<body>
+<h1>角鋼貨架計算機</h1>
+<div class="layout">
+  <div class="left-col">
+    <div class="panel">
+      <div class="gt">主體</div>
+      <div class="ig2">
+        <div class="field"><label><span class="dot" style="background:var(--am)"></span>長（尺）</label><input type="number" id="iL" value="3" min="0.5" max="20" step="0.5" oninput="update()"></div>
+        <div class="field"><label><span class="dot" style="background:var(--te)"></span>深（尺）</label><input type="number" id="iD" value="1" min="0.5" max="10" step="0.5" oninput="update()"></div>
+        <div class="field"><label><span class="dot" style="background:var(--re)"></span>高（尺）</label><input type="number" id="iH" value="5" min="0.5" max="20" step="0.5" oninput="update()"></div>
+        <div class="field"><label><span class="dot" style="background:var(--pu)"></span>層數（含底+頂）</label><input type="number" id="iN" value="3" min="2" max="12" step="1" oninput="update()"></div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="gt">上區（靠左）</div>
+      <div class="ig">
+        <div class="field"><label><span class="dot" style="background:var(--na)"></span>上長（尺）</label><input type="number" id="iUL" value="1" min="0.5" max="20" step="0.5" oninput="update()"></div>
+        <div class="field"><label><span class="dot" style="background:var(--na)"></span>上高（尺）</label><input type="number" id="iUH" value="1.5" min="0.5" max="10" step="0.5" oninput="update()"></div>
+        <div class="field"><label><span class="dot" style="background:var(--na)"></span>上層數（片）</label><input type="number" id="iUN" value="2" min="1" max="10" step="1" oninput="update()"></div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="gt">下區（靠右）</div>
+      <div class="ig">
+        <div class="field"><label><span class="dot" style="background:var(--pi)"></span>下長（尺）</label><input type="number" id="iDL" value="2" min="0.5" max="20" step="0.5" oninput="update()"></div>
+        <div class="field"><label><span class="dot" style="background:var(--pi)"></span>下高（尺）</label><input type="number" id="iDH" value="1.5" min="0.5" max="10" step="0.5" oninput="update()"></div>
+        <div class="field"><label><span class="dot" style="background:var(--pi)"></span>下層數（片）</label><input type="number" id="iDN" value="2" min="1" max="10" step="1" oninput="update()"></div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="gt">單價</div>
+      <div class="ig">
+        <div class="field"><label>角鋼單價（元/尺）</label><input type="number" id="iPS" value="42" min="0" oninput="update()"></div>
+        <div class="field"><label>層板單價（元/才）</label><input type="number" id="iPB" value="37" min="0" oninput="update()"></div>
+        <div class="field"><label>客製費（元）</label><input type="number" id="iPC" value="0" min="0" oninput="update()"></div>
+      </div>
+    </div>
+    <div class="panel panel-results">
+      <div class="gt">計算結果（黃底自動計算）</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;margin-bottom:4px">
+        <div class="rr y"><span class="rl">補強尺數</span><span class="rv" id="r_kk">—</span></div>
+        <div class="rr y"><span class="rl">角鋼總尺</span><span class="rv" id="r_sf">—</span></div>
+        <div class="rr y"><span class="rl">角鋼總價</span><span class="rv" id="r_sa">—</span></div>
+        <div class="rr y"><span class="rl">層板總才</span><span class="rv" id="r_bf">—</span></div>
+        <div class="rr y"><span class="rl">層板總價</span><span class="rv" id="r_ba">—</span></div>
+        <div class="rr y"><span class="rl">封版總才</span><span class="rv" id="r_pf">—</span></div>
+        <div class="rr y"><span class="rl">封版總價</span><span class="rv" id="r_pa">—</span></div>
+        <div class="rr y"><span class="rl">運費</span><span class="rv" id="r_sh">—</span></div>
+        <div class="rr y"><span class="rl">客製費</span><span class="rv" id="r_cu">—</span></div>
+      </div>
+      <div class="rr y span big"><span class="rl">總價</span><span class="rv" id="r_tot">—</span></div>
+    </div>
+  </div>
+
+  <div class="svg-wrap">
+    <svg id="svgMain" class="main"></svg>
+  </div>
+</div>
+
+<script>
+var NS = 'http://www.w3.org/2000/svg';
+var SNAP = 3.8;
+
+/* ── global scene state ── */
+var sc = {
+  shelfFracs: [],   // [0..1] fraction of H, length=N, [0]=0 [N-1]=1 fixed
+  uBoxFrac:   null, // bottom of upper zone as fraction of H
+  uShelfFracs:[],   // fractions within upper zone [0..1] relative to UH, length=UN
+  dBoxFrac:   null, // bottom of lower zone as fraction of H
+  dShelfFracs:[],   // fractions within lower zone [0..1] relative to DH, length=DN
+};
+
+/* ── isometric transform state ── */
+var iso = { S:40, ox:200, fy:400 };
+
+function gv(id){ var v=parseFloat(document.getElementById(id).value); return isNaN(v)?0:v; }
+function P(x,y,z){ return { sx: iso.ox+(x-y)*iso.S*0.866, sy: iso.fy - z*iso.S + y*iso.S*0.5 + x*iso.S*0.5 }; }
+
+function reinforceCount(len){ return len===8?3:len>=7?2:(len>=4&&len<=6.5?1:0); }
+
+function calcPrices(){
+  var L=Math.max(0,gv('iL')),D=Math.max(0.5,gv('iD')),H=Math.max(0.5,gv('iH'));
+  var N=Math.max(2,Math.round(gv('iN')));
+  var UL=Math.max(0,gv('iUL')),UH=Math.max(0,gv('iUH')),UN=Math.max(1,Math.round(gv('iUN')));
+  var DL=Math.max(0,gv('iDL')),DH=Math.max(0,gv('iDH')),DN=Math.max(1,Math.round(gv('iDN')));
+  var PS=gv('iPS'),PB=gv('iPB'),PC=gv('iPC');
+  var KK=reinforceCount(L)*D*N+reinforceCount(UL)*D*UN+reinforceCount(DL)*DL*DN;
+  var sf=(L*2*N)+(D*2*N)+(H*4)+(UL*2*UN)+(D*2*UN)+(UH*2)+(DL*2*DN)+(D*2*DN)+(DH*2)+KK;
+  var sa=sf*PS, bf=(L*D*N)+(UL*D*UN)+(DL*D*DN), ba=bf*PB;
+  var pf=(D*UH)+(D*DH), pa=pf*(PB+15);
+  var base=sa+ba+pa, units=base===0?0:Math.ceil(base/1000)+(base%1000===0?1:0);
+  var sh=units*140, tot=Math.floor((sa+ba+sh+pa+PC+200)/10)*10;
+  function f(n){return '$'+n.toLocaleString();}
+  document.getElementById('r_kk').textContent=KK.toFixed(1)+' 尺';
+  document.getElementById('r_sf').textContent=sf.toFixed(1)+' 尺';
+  document.getElementById('r_sa').textContent=f(sa);
+  document.getElementById('r_bf').textContent=bf.toFixed(1)+' 才';
+  document.getElementById('r_ba').textContent=f(ba);
+  document.getElementById('r_pf').textContent=pf.toFixed(1)+' 才';
+  document.getElementById('r_pa').textContent=f(pa);
+  document.getElementById('r_sh').textContent=f(sh);
+  document.getElementById('r_cu').textContent=f(PC);
+  document.getElementById('r_tot').textContent=f(tot);
+}
+
+function initState(){
+  var N=Math.max(2,Math.round(gv('iN')));
+  var UN=Math.max(1,Math.round(gv('iUN')));
+  var DN=Math.max(1,Math.round(gv('iDN')));
+  sc.shelfFracs=[];
+  for(var i=0;i<N;i++) sc.shelfFracs.push(i/(N-1));
+  sc.uBoxFrac = (N-2)/(N-1);
+  sc.dBoxFrac = 0;
+  sc.uShelfFracs=[];
+  for(var i=0;i<UN;i++) sc.uShelfFracs.push(i===0?1:1-i/(UN));
+  sc.dShelfFracs=[];
+  for(var i=0;i<DN;i++) sc.dShelfFracs.push(i===0?1:1-i/(DN));
+}
+
+function update(reset){
+  if(reset||sc.shelfFracs.length===0) initState();
+  // ensure array lengths match current N/UN/DN
+  var N=Math.max(2,Math.round(gv('iN')));
+  var UN=Math.max(1,Math.round(gv('iUN')));
+  var DN=Math.max(1,Math.round(gv('iDN')));
+  while(sc.shelfFracs.length<N) sc.shelfFracs.push(1);
+  while(sc.shelfFracs.length>N) sc.shelfFracs.pop();
+  sc.shelfFracs[0]=0; sc.shelfFracs[N-1]=1;
+  while(sc.uShelfFracs.length<UN) sc.uShelfFracs.push(0);
+  while(sc.uShelfFracs.length>UN) sc.uShelfFracs.pop();
+  while(sc.dShelfFracs.length<DN) sc.dShelfFracs.push(0);
+  while(sc.dShelfFracs.length>DN) sc.dShelfFracs.pop();
+  if(sc.uBoxFrac===null) sc.uBoxFrac=(N-2)/(N-1);
+  if(sc.dBoxFrac===null) sc.dBoxFrac=0;
+  calcPrices();
+  redraw();
+}
+
+/* ── SVG helpers ── */
+function el(tag,attrs,cur){
+  var e=document.createElementNS(NS,tag);
+  for(var k in attrs) e.setAttribute(k,attrs[k]);
+  if(cur) e.style.cursor=cur;
+  return e;
+}
+function segEl(p1,p2,col,sw,dash){
+  return el('line',{x1:p1.sx.toFixed(1),y1:p1.sy.toFixed(1),
+    x2:p2.sx.toFixed(1),y2:p2.sy.toFixed(1),
+    stroke:col,'stroke-width':sw,'stroke-linecap':'round','stroke-dasharray':dash||''});
+}
+function faceEl(pts,fill,stroke,sw,dash){
+  var d=pts.map(function(p,i){return(i?'L':'M')+p.sx.toFixed(1)+','+p.sy.toFixed(1);}).join(' ')+'Z';
+  return el('path',{d:d,fill:fill,stroke:stroke,'stroke-width':sw,'stroke-dasharray':dash||''});
+}
+function hitFace(pts,dtype,extra){
+  var d=pts.map(function(p,i){return(i?'L':'M')+p.sx.toFixed(1)+','+p.sy.toFixed(1);}).join(' ')+'Z';
+  var attrs={d:d,fill:'transparent',stroke:'none','data-dtype':dtype};
+  if(extra) for(var k in extra) attrs[k]=extra[k];
+  return el('path',attrs,'ns-resize');
+}
+function hitLine(p1,p2,dtype,cur){
+  var e=el('line',{x1:p1.sx.toFixed(1),y1:p1.sy.toFixed(1),
+    x2:p2.sx.toFixed(1),y2:p2.sy.toFixed(1),
+    stroke:'transparent','stroke-width':18,'data-dtype':dtype});
+  e.style.cursor=cur||'ns-resize';
+  return e;
+}
+
+/* ── REDRAW ── */
+function redraw(){
+  var L=Math.max(0,gv('iL')), D=Math.max(0,gv('iD')), H=Math.max(0,gv('iH'));
+  var N=Math.max(2,Math.round(gv('iN')));
+  var UL=Math.max(0,gv('iUL')), UH=Math.max(0,gv('iUH')), UN=Math.max(1,Math.round(gv('iUN')));
+  var DL=Math.max(0,gv('iDL')), DH=Math.max(0,gv('iDH')), DN=Math.max(1,Math.round(gv('iDN')));
+
+  var showU = (UL>0 && UH>0);
+  var showD = (DL>0 && DH>0);
+  var showMain = (L>0 && D>0 && H>0);
+
+  var uBotZ = showU ? Math.max(0, Math.min(H-UH, sc.uBoxFrac*H)) : 0;
+  var uTopZ = uBotZ + UH;
+  var dBotZ = showD ? Math.max(0, Math.min(H-DH, sc.dBoxFrac*H)) : 0;
+  var dTopZ = dBotZ + DH;
+  var dX    = L - DL;
+  var maxZ  = Math.max(H, showU?uTopZ:0);
+
+  var svg=document.getElementById('svgMain');
+  var VW=580;
+  var safeMax = Math.max(L,D,maxZ,0.5);
+  iso.S  = Math.min(36, 109/safeMax);
+  iso.ox = VW*0.28 + D*iso.S*0.866*0.3;
+  iso.fy = 42 + maxZ*iso.S + D*iso.S*0.5 + L*iso.S*0.5;
+
+  /* viewBox */
+  var corners=[P(0,0,0),P(L,0,0),P(0,D,0),P(L,D,0),P(0,0,H),P(L,0,H),P(0,D,H),P(L,D,H)];
+  if(showU){[0,UL].forEach(function(x){[0,D].forEach(function(y){corners.push(P(x,y,uBotZ));corners.push(P(x,y,uTopZ));});});}
+  if(showD){[dX,L].forEach(function(x){[0,D].forEach(function(y){corners.push(P(x,y,dBotZ));corners.push(P(x,y,dTopZ));});});}
+  var minY=Math.min.apply(null,corners.map(function(p){return p.sy;}))-36;
+  var maxY=Math.max.apply(null,corners.map(function(p){return p.sy;}))+36;
+  var minX=Math.min.apply(null,corners.map(function(p){return p.sx;}))-80;
+  var maxX=Math.max.apply(null,corners.map(function(p){return p.sx;}))+120; svg.setAttribute('viewBox',minX.toFixed(0)+' '+minY.toFixed(0)+' '+(maxX-minX).toFixed(0)+' '+(maxY-minY).toFixed(0));
+  svg.innerHTML='';
+
+  if(!showMain) return;
+
+  var AM='#F5A623', TE='#5DCAA5', RE='#111111', PU='#7F77DD', NA='#1A237E', PI='#C2185B';
+
+  /* ── MAIN shelves: ALL draggable (incl. top & bottom) ── */
+  var YCOL='#D8D8C4';
+  var mainRK=reinforceCount(L);
+  for(var i=0;i<N;i++){
+    var z=sc.shelfFracs[i]*H;
+    /* 1. face */
+    svg.appendChild(faceEl([P(0,0,z),P(L,0,z),P(L,D,z),P(0,D,z)],'#7F77DD1A',PU,1.3,'5,3'));
+    /* 2. reinforcement bars — drawn below frame lines, above face */
+    if(mainRK>0){
+      for(var ri=1;ri<=mainRK;ri++){
+        var xPos=L*ri/(mainRK+1);
+        svg.appendChild(segEl(P(xPos,0,z),P(xPos,D,z),YCOL,2.2,'','0.5'));
+      }
+    }
+    /* 3. frame lines on top */
+    svg.appendChild(segEl(P(0,0,z),P(L,0,z),AM,2));
+    svg.appendChild(segEl(P(0,D,z),P(L,D,z),AM,2));
+    svg.appendChild(segEl(P(0,0,z),P(0,D,z),TE,2));
+    svg.appendChild(segEl(P(L,0,z),P(L,D,z),TE,2));
+    /* 4. hit target */
+    var h=hitFace([P(0,0,z),P(L,0,z),P(L,D,z),P(0,D,z)],'shelf');
+    h.setAttribute('data-idx',i);
+    svg.appendChild(h);
+  }
+
+  /* ── MAIN 4 pillars + zone ordering ── */
+  /* 前左 最底 */
+  svg.appendChild(segEl(P(0,0,0),P(0,0,H),RE,2.5));
+  /* 前右 */
+  svg.appendChild(segEl(P(L,0,0),P(L,0,H),RE,2.5));
+  /* 後右 */
+  svg.appendChild(segEl(P(L,D,0),P(L,D,H),RE,2.5));
+  /* 後左 */
+  svg.appendChild(segEl(P(0,D,0),P(0,D,H),RE,2.5));
+
+  /* ── LOWER ZONE (ㄇ shape) ── */
+  if(showD){
+    /* two left-side pillars: fixed from dBotZ to dTopZ */
+    svg.appendChild(segEl(P(dX,0,dBotZ),P(dX,0,dTopZ),PI,2.8));
+    svg.appendChild(segEl(P(dX,D,dBotZ),P(dX,D,dTopZ),PI,2.8));
+    /* right-side pillars: fixed from dBotZ to dTopZ */
+    svg.appendChild(segEl(P(L,0,dBotZ),P(L,0,dTopZ),PI,2.8));
+    svg.appendChild(segEl(P(L,D,dBotZ),P(L,D,dTopZ),PI,2.8));
+
+    /* lower shelves — all draggable */
+    var dSorted=sc.dShelfFracs.slice().map(function(f,i){return{f:f,i:i};});
+    dSorted.sort(function(a,b){return a.f-b.f;});
+    for(var si=0;si<dSorted.length;si++){
+      var item=dSorted[si];
+      var frac=item.f;
+      var origIdx=item.i;
+      var z=dBotZ+frac*DH;
+      z=Math.max(dBotZ+0.001, Math.min(dTopZ-0.001, z));
+      svg.appendChild(faceEl([P(dX,0,z),P(L,0,z),P(L,D,z),P(dX,D,z)],'#C2185B14',PI,1.3,'4,3'));
+      /* lower reinforce under frame */
+      var dRK2=reinforceCount(DL);
+      if(dRK2>0){ for(var ri=1;ri<=dRK2;ri++){ var xp=dX+DL*ri/(dRK2+1); svg.appendChild(segEl(P(xp,0,z),P(xp,D,z),YCOL,2.2,'','0.5')); } }
+      svg.appendChild(segEl(P(dX,0,z),P(L,0,z),PI,2));
+      svg.appendChild(segEl(P(dX,D,z),P(L,D,z),PI,2));
+      svg.appendChild(segEl(P(dX,0,z),P(dX,D,z),PI,2));
+      svg.appendChild(segEl(P(L,0,z),P(L,D,z),PI,2));
+      /* ALL lower shelves draggable */
+      var h=hitFace([P(dX,0,z),P(L,0,z),P(L,D,z),P(dX,D,z)],'dshelf');
+      h.setAttribute('data-idx',origIdx);
+      svg.appendChild(h);
+    }
+
+    /* pillar hits → move entire lower zone (snap 3.8) */
+    svg.appendChild(hitLine(P(dX,0,dBotZ),P(dX,0,dTopZ),'dbox','ns-resize'));
+    svg.appendChild(hitLine(P(dX,D,dBotZ),P(dX,D,dTopZ),'dbox','ns-resize'));
+    svg.appendChild(hitLine(P(L,0,dBotZ),P(L,0,dTopZ),'dbox','ns-resize'));
+    svg.appendChild(hitLine(P(L,D,dBotZ),P(L,D,dTopZ),'dbox','ns-resize'));
+  }
+
+  /* ── UPPER ZONE (ㄇ shape) ── */
+  if(showU){
+    /* two right-side pillars: fixed from uBotZ to uTopZ */
+    svg.appendChild(segEl(P(UL,0,uBotZ),P(UL,0,uTopZ),NA,2.8));
+    svg.appendChild(segEl(P(UL,D,uBotZ),P(UL,D,uTopZ),NA,2.8));
+    /* left-side pillars: fixed from uBotZ to uTopZ */
+    svg.appendChild(segEl(P(0,0,uBotZ),P(0,0,uTopZ),NA,2.8));
+    svg.appendChild(segEl(P(0,D,uBotZ),P(0,D,uTopZ),NA,2.8));
+
+    /* upper shelves — all draggable within uBotZ..uTopZ */
+    /* draw from lowest to highest so top shelf is rendered last (on top) */
+    var uSorted=sc.uShelfFracs.slice().map(function(f,i){return{f:f,i:i};});
+    uSorted.sort(function(a,b){return a.f-b.f;});
+    for(var si=0;si<uSorted.length;si++){
+      var item=uSorted[si];
+      var frac=item.f;
+      var origIdx=item.i;
+      var z=uBotZ+frac*UH;
+      z=Math.max(uBotZ+0.001, Math.min(uTopZ-0.001, z));
+      svg.appendChild(faceEl([P(0,0,z),P(UL,0,z),P(UL,D,z),P(0,D,z)],'#1A237E14',NA,1.3,'4,3'));
+      /* upper reinforce under frame */
+      var uRK2=reinforceCount(UL);
+      if(uRK2>0){ for(var ri=1;ri<=uRK2;ri++){ var xp=UL*ri/(uRK2+1); svg.appendChild(segEl(P(xp,0,z),P(xp,D,z),YCOL,2.2,'','0.5')); } }
+      svg.appendChild(segEl(P(0,0,z),P(UL,0,z),NA,2));
+      svg.appendChild(segEl(P(0,D,z),P(UL,D,z),NA,2));
+      svg.appendChild(segEl(P(0,0,z),P(0,D,z),NA,2));
+      svg.appendChild(segEl(P(UL,0,z),P(UL,D,z),NA,2));
+      /* ALL upper shelves draggable */
+      var h=hitFace([P(0,0,z),P(UL,0,z),P(UL,D,z),P(0,D,z)],'ushelf');
+      h.setAttribute('data-idx',origIdx);
+      svg.appendChild(h);
+    }
+
+    /* pillar hits → move entire upper zone (snap 3.8) */
+    svg.appendChild(hitLine(P(UL,0,uBotZ),P(UL,0,uTopZ),'ubox','ns-resize'));
+    svg.appendChild(hitLine(P(UL,D,uBotZ),P(UL,D,uTopZ),'ubox','ns-resize'));
+    svg.appendChild(hitLine(P(0,0,uBotZ),P(0,0,uTopZ),'ubox','ns-resize'));
+    svg.appendChild(hitLine(P(0,D,uBotZ),P(0,D,uTopZ),'ubox','ns-resize'));
+  }
+
+  /* 後左 最頂，蓋在下區與上區上面 */
+  svg.appendChild(segEl(P(0,D,0),P(0,D,H),RE,2.5));
+
+  /* ── DIMENSION ANNOTATIONS ── */
+  /* 實際尺寸 cm = 數值 × 8 × 3.8 + 0.5 */
+  function dimH(zBot, zTop, color, label, offsetX){
+    if(zBot>=zTop) return;
+    var pBot=P(0,0,zBot), pTop=P(0,0,zTop);
+    /* vertical dim line left of left pillar */
+    var x0=pBot.sx+offsetX;
+    var x1=pTop.sx+offsetX;
+    /* tick lines */
+    var tickL=6;
+    var tickBot=el('line',{x1:x0-tickL,y1:pBot.sy.toFixed(1),x2:x0+tickL,y2:pBot.sy.toFixed(1),stroke:color,'stroke-width':1});
+    var tickTop=el('line',{x1:x1-tickL,y1:pTop.sy.toFixed(1),x2:x1+tickL,y2:pTop.sy.toFixed(1),stroke:color,'stroke-width':1});
+    /* dim line */
+    var dimLine=el('line',{x1:x0.toFixed(1),y1:pBot.sy.toFixed(1),x2:x1.toFixed(1),y2:pTop.sy.toFixed(1),stroke:color,'stroke-width':1,'stroke-dasharray':'3,2'});
+    /* label */
+    var mx=(x0+x1)/2-14;
+    var my=(pBot.sy+pTop.sy)/2;
+    var txt=el('text',{x:mx.toFixed(1),y:my.toFixed(1),fill:color,'font-size':'11','text-anchor':'end','dominant-baseline':'central','font-family':'sans-serif'});
+    txt.textContent=label;
+    svg.appendChild(dimLine);
+    svg.appendChild(tickBot);
+    svg.appendChild(tickTop);
+    svg.appendChild(txt);
+  }
+
+  function cmLabel(val){ return (val*8*3.8).toFixed(1)+' cm'; }
+
+  /* 右側 x 基準：右側主體立柱前緣 P(L,0,z) */
+  function dimRight(zBot, zTop, color, label, offR){
+    if(zBot>=zTop) return;
+    var pBot=P(L,0,zBot), pTop=P(L,0,zTop);
+    var x0=pBot.sx+offR, x1=pTop.sx+offR;
+    var tickL=6;
+    svg.appendChild(el('line',{x1:(x0-tickL).toFixed(1),y1:pBot.sy.toFixed(1),x2:(x0+tickL).toFixed(1),y2:pBot.sy.toFixed(1),stroke:color,'stroke-width':1}));
+    svg.appendChild(el('line',{x1:(x1-tickL).toFixed(1),y1:pTop.sy.toFixed(1),x2:(x1+tickL).toFixed(1),y2:pTop.sy.toFixed(1),stroke:color,'stroke-width':1}));
+    svg.appendChild(el('line',{x1:x0.toFixed(1),y1:pBot.sy.toFixed(1),x2:x1.toFixed(1),y2:pTop.sy.toFixed(1),stroke:color,'stroke-width':1,'stroke-dasharray':'3,2'}));
+    var txt=el('text',{x:(x0+8).toFixed(1),y:((pBot.sy+pTop.sy)/2).toFixed(1),fill:color,'font-size':'11','text-anchor':'start','dominant-baseline':'central','font-family':'sans-serif'});
+    txt.textContent=label;
+    svg.appendChild(txt);
+  }
+
+  /* ── 主體：每格淨高，標在後左角 P(0,D,z) 往左 ── */
+  /* 每格各扣 7.6，總扣 N*7.6；若無法整除，多餘分配到最下格 */
+  var mainFracsAsc = sc.shelfFracs.slice().sort(function(a,b){return a-b;});
+  var dimOff = 28;
+  var mNGaps = mainFracsAsc.length - 1;
+  var mTotalCm = H * 8 * 3.8;
+  var mDeduct = N * 7.6;
+  var mNetTotal = mTotalCm - mDeduct;
+  /* raw net per gap (proportional to gap fraction) */
+  for(var i=0;i<mNGaps;i++){
+    var gapFrac = mainFracsAsc[i+1] - mainFracsAsc[i];
+    var rawNet = gapFrac * mTotalCm - 7.6;
+    /* bottom gap (i===0): add remainder */
+    var zBot = mainFracsAsc[i]*H;
+    var zTop = mainFracsAsc[i+1]*H;
+    var pBot=P(0,D,zBot), pTop=P(0,D,zTop);
+    var x0=pBot.sx-dimOff, x1=pTop.sx-dimOff;
+    svg.appendChild(el('line',{x1:(pBot.sx-4).toFixed(1),y1:pBot.sy.toFixed(1),x2:(x0).toFixed(1),y2:pBot.sy.toFixed(1),stroke:PU,'stroke-width':0.8}));
+    svg.appendChild(el('line',{x1:(pTop.sx-4).toFixed(1),y1:pTop.sy.toFixed(1),x2:(x1).toFixed(1),y2:pTop.sy.toFixed(1),stroke:PU,'stroke-width':0.8}));
+    svg.appendChild(el('line',{x1:((x0+x1)/2).toFixed(1),y1:pBot.sy.toFixed(1),x2:((x0+x1)/2).toFixed(1),y2:pTop.sy.toFixed(1),stroke:PU,'stroke-width':0.8,'stroke-dasharray':'3,2'}));
+    var t=el('text',{x:((x0+x1)/2-5).toFixed(1),y:((pBot.sy+pTop.sy)/2).toFixed(1),fill:PU,'font-size':'10','text-anchor':'end','dominant-baseline':'central','font-family':'sans-serif'});
+    t.textContent=rawNet.toFixed(1)+' cm';
+    svg.appendChild(t);
+  }
+  /* distribute remainder to bottom gap (i===0) */
+  /* recalculate bottom gap with remainder */
+  if(mNGaps>0){
+    var mSumRaw=0;
+    for(var i=1;i<mNGaps;i++) mSumRaw+=((mainFracsAsc[i+1]-mainFracsAsc[i])*mTotalCm-7.6);
+    /* bottom gap net already drawn above, but we need to redo it with remainder */
+    /* simpler: just add remainder label on bottom gap only */
+    /* Actually rebuild: collect all raw nets, compute remainder, add to bottom */
+    var mNets=[];
+    for(var i=0;i<mNGaps;i++) mNets.push((mainFracsAsc[i+1]-mainFracsAsc[i])*mTotalCm - 7.6);
+    var mSumNets=0; for(var i=0;i<mNets.length;i++) mSumNets+=mNets[i];
+    var mRemainder=mNetTotal-mSumNets; /* should be 0 or small float */
+    /* We already drew labels above with rawNet; if remainder non-zero add to bottom gap */
+    /* To keep it clean, redo the bottom gap label only */
+    if(Math.abs(mRemainder)>0.05){
+      mNets[0]+=mRemainder;
+      /* redraw bottom gap label (overwrite) */
+      var i=0;
+      var zBot2=mainFracsAsc[0]*H, zTop2=mainFracsAsc[1]*H;
+      var pBot2=P(0,D,zBot2), pTop2=P(0,D,zTop2);
+      var x02=pBot2.sx-dimOff, x12=pTop2.sx-dimOff;
+      var cover=el('rect',{x:(x02-60).toFixed(1),y:(pTop2.sy-1).toFixed(1),width:'60',height:((pBot2.sy-pTop2.sy)+2).toFixed(1),fill:'var(--surface)'});
+      svg.appendChild(cover);
+      var t2=el('text',{x:((x02+x12)/2-5).toFixed(1),y:((pBot2.sy+pTop2.sy)/2).toFixed(1),fill:PU,'font-size':'10','text-anchor':'end','dominant-baseline':'central','font-family':'sans-serif'});
+      t2.textContent=mNets[0].toFixed(1)+' cm';
+      svg.appendChild(t2);
+    }
+  }
+
+  /* ── 上區：標在 UL 右側，每格扣 7.6，餘數給最下格 ── */
+  if(showU){
+    var uFracsAsc=sc.uShelfFracs.slice().sort(function(a,b){return a-b;});
+    function uDimTick(zB,zT,cm){
+      var pB=P(UL,0,zB), pT=P(UL,0,zT);
+      svg.appendChild(el('line',{x1:(pB.sx+4).toFixed(1),y1:pB.sy.toFixed(1),x2:(pB.sx+18).toFixed(1),y2:pB.sy.toFixed(1),stroke:NA,'stroke-width':0.8}));
+      svg.appendChild(el('line',{x1:(pT.sx+4).toFixed(1),y1:pT.sy.toFixed(1),x2:(pT.sx+18).toFixed(1),y2:pT.sy.toFixed(1),stroke:NA,'stroke-width':0.8}));
+      svg.appendChild(el('line',{x1:(pB.sx+11).toFixed(1),y1:pB.sy.toFixed(1),x2:(pT.sx+11).toFixed(1),y2:pT.sy.toFixed(1),stroke:NA,'stroke-width':0.8,'stroke-dasharray':'3,2'}));
+      var t=el('text',{x:(pB.sx+22).toFixed(1),y:((pB.sy+pT.sy)/2).toFixed(1),fill:NA,'font-size':'10','text-anchor':'start','dominant-baseline':'central','font-family':'sans-serif'});
+      t.textContent=cm.toFixed(1)+' cm'; svg.appendChild(t);
+    }
+    /* build nets array: [botGap, gap1, gap2, ...] */
+    var uNets=[];
+    var uTotalCm=UH*8*3.8;
+    var uDeduct=UN*7.6;
+    var uNetTotal=uTotalCm-uDeduct;
+    /* bottom gap (pillar base to lowest shelf) */
+    if(uFracsAsc.length>0 && uFracsAsc[0]>0.005){
+      uNets.push({zB:uBotZ, zT:uBotZ+uFracsAsc[0]*UH, net:uFracsAsc[0]*uTotalCm - 7.6, isBot:true});
+    }
+    for(var i=0;i<uFracsAsc.length-1;i++){
+      uNets.push({zB:uBotZ+uFracsAsc[i]*UH, zT:uBotZ+uFracsAsc[i+1]*UH, net:(uFracsAsc[i+1]-uFracsAsc[i])*uTotalCm - 7.6, isBot:false});
+    }
+    /* remainder to bottom (index 0) */
+    if(uNets.length>0){
+      var uSumNets=0; for(var i=0;i<uNets.length;i++) uSumNets+=uNets[i].net;
+      uNets[0].net += (uNetTotal - uSumNets);
+    }
+    for(var i=0;i<uNets.length;i++) uDimTick(uNets[i].zB, uNets[i].zT, uNets[i].net);
+  }
+
+  /* ── 下區：標在 L 右側，每格扣 7.6，餘數給最下格 ── */
+  if(showD){
+    var dFracsAsc=sc.dShelfFracs.slice().sort(function(a,b){return a-b;});
+    function dDimTick(zB,zT,cm){
+      var pB=P(L,0,zB), pT=P(L,0,zT);
+      svg.appendChild(el('line',{x1:(pB.sx+4).toFixed(1),y1:pB.sy.toFixed(1),x2:(pB.sx+18).toFixed(1),y2:pB.sy.toFixed(1),stroke:PI,'stroke-width':0.8}));
+      svg.appendChild(el('line',{x1:(pT.sx+4).toFixed(1),y1:pT.sy.toFixed(1),x2:(pT.sx+18).toFixed(1),y2:pT.sy.toFixed(1),stroke:PI,'stroke-width':0.8}));
+      svg.appendChild(el('line',{x1:(pB.sx+11).toFixed(1),y1:pB.sy.toFixed(1),x2:(pT.sx+11).toFixed(1),y2:pT.sy.toFixed(1),stroke:PI,'stroke-width':0.8,'stroke-dasharray':'3,2'}));
+      var t=el('text',{x:(pB.sx+22).toFixed(1),y:((pB.sy+pT.sy)/2).toFixed(1),fill:PI,'font-size':'10','text-anchor':'start','dominant-baseline':'central','font-family':'sans-serif'});
+      t.textContent=cm.toFixed(1)+' cm'; svg.appendChild(t);
+    }
+    var dNets=[];
+    var dTotalCm=DH*8*3.8;
+    var dDeduct=DN*7.6;
+    var dNetTotal=dTotalCm-dDeduct;
+    if(dFracsAsc.length>0 && dFracsAsc[0]>0.005){
+      dNets.push({zB:dBotZ, zT:dBotZ+dFracsAsc[0]*DH, net:dFracsAsc[0]*dTotalCm - 7.6, isBot:true});
+    }
+    for(var i=0;i<dFracsAsc.length-1;i++){
+      dNets.push({zB:dBotZ+dFracsAsc[i]*DH, zT:dBotZ+dFracsAsc[i+1]*DH, net:(dFracsAsc[i+1]-dFracsAsc[i])*dTotalCm - 7.6, isBot:false});
+    }
+    if(dNets.length>0){
+      var dSumNets=0; for(var i=0;i<dNets.length;i++) dSumNets+=dNets[i].net;
+      dNets[0].net += (dNetTotal - dSumNets);
+    }
+    for(var i=0;i<dNets.length;i++) dDimTick(dNets[i].zB, dNets[i].zT, dNets[i].net);
+  }
+
+}
+
+/* ═══════════════════════════════════════════════
+   DRAG
+═══════════════════════════════════════════════ */
+var drag=null;
+
+function svgPt(evt){
+  var svg=document.getElementById('svgMain');
+  var r=svg.getBoundingClientRect();
+  var vb=svg.viewBox.baseVal;
+  var sx=vb.width/r.width, sy=vb.height/r.height;
+  var cx=(evt.touches?evt.touches[0].clientX:evt.clientX)-r.left;
+  var cy=(evt.touches?evt.touches[0].clientY:evt.clientY)-r.top;
+  return {sx:vb.x+cx*sx, sy:vb.y+cy*sy};
+}
+
+/* screen-Y → world-Z: dz = -dsy/S */
+function syToZ(dsy){ return -dsy/iso.S; }
+
+function onDown(evt){
+  var t=evt.target;
+  while(t&&t.tagName!=='svg'){
+    var dt=t.getAttribute('data-dtype');
+    if(dt){
+      evt.preventDefault();
+      var sp=svgPt(evt);
+      var H=Math.max(0.5,gv('iH'));
+      var UH=Math.max(0,gv('iUH'));
+      var DH=Math.max(0,gv('iDH'));
+      var N=Math.max(2,Math.round(gv('iN')));
+      var startSY=sp.sy;
+
+      if(dt==='shelf'){
+        var idx=parseInt(t.getAttribute('data-idx'));
+        drag={type:'shelf',idx:idx,startSY:startSY,startFrac:sc.shelfFracs[idx],H:H,N:N};
+      } else if(dt==='ubox'){
+        drag={type:'ubox',startSY:startSY,startFrac:sc.uBoxFrac,H:H,UH:UH};
+      } else if(dt==='dbox'){
+        drag={type:'dbox',startSY:startSY,startFrac:sc.dBoxFrac,H:H,DH:DH};
+      } else if(dt==='ushelf'){
+        var idx=parseInt(t.getAttribute('data-idx'));
+        drag={type:'ushelf',idx:idx,startSY:startSY,startFrac:sc.uShelfFracs[idx],UH:UH};
+      } else if(dt==='dshelf'){
+        var idx=parseInt(t.getAttribute('data-idx'));
+        drag={type:'dshelf',idx:idx,startSY:startSY,startFrac:sc.dShelfFracs[idx],DH:DH};
+      }
+      return;
+    }
+    t=t.parentNode;
+  }
+}
+
+function onMove(evt){
+  if(!drag) return;
+  evt.preventDefault();
+  var sp=svgPt(evt);
+  var dsy=sp.sy-drag.startSY;
+
+  if(drag.type==='shelf'){
+    /* snap 3.8px, all shelves moveable, stay between neighbours */
+    var steps=Math.round(dsy/SNAP);
+    var dz=syToZ(steps*SNAP);
+    var newFrac=drag.startFrac+dz/drag.H;
+    var N=sc.shelfFracs.length;
+    var idx=drag.idx;
+    var lo=idx>0   ? sc.shelfFracs[idx-1]+0.02 : 0;
+    var hi=idx<N-1 ? sc.shelfFracs[idx+1]-0.02 : 1;
+    sc.shelfFracs[idx]=Math.max(lo,Math.min(hi,newFrac));
+
+  } else if(drag.type==='ubox'){
+    /* snap 3.8px, move entire upper zone */
+    var steps=Math.round(dsy/SNAP);
+    var dz=syToZ(steps*SNAP);
+    var UH=drag.UH,H=drag.H;
+    var newFrac=drag.startFrac+dz/H;
+    sc.uBoxFrac=Math.max(0,Math.min(1-UH/H,newFrac));
+
+  } else if(drag.type==='dbox'){
+    /* snap 3.8px, move entire lower zone */
+    var steps=Math.round(dsy/SNAP);
+    var dz=syToZ(steps*SNAP);
+    var DH=drag.DH,H=drag.H;
+    var newFrac=drag.startFrac+dz/H;
+    sc.dBoxFrac=Math.max(0,Math.min(1-DH/H,newFrac));
+
+  } else if(drag.type==='ushelf'){
+    /* snap 3.8px, within upper zone [0..1], stay between neighbours */
+    var steps=Math.round(dsy/SNAP);
+    var dz=syToZ(steps*SNAP);
+    var UH=drag.UH;
+    var newFrac=drag.startFrac+dz/UH;
+    var idx=drag.idx;
+    var n=sc.uShelfFracs.length;
+    /* sort fracs descending to find neighbours: higher idx = lower shelf */
+    var sorted=sc.uShelfFracs.map(function(f,i){return{f:f,i:i};}).sort(function(a,b){return b.f-a.f;});
+    var rank=0; for(var r=0;r<sorted.length;r++){ if(sorted[r].i===idx){rank=r;break;} }
+    var hi=rank>0            ? sorted[rank-1].f-0.02 : 1.0;
+    var lo=rank<sorted.length-1 ? sorted[rank+1].f+0.02 : 0.0;
+    sc.uShelfFracs[idx]=Math.max(lo,Math.min(hi,newFrac));
+
+  } else if(drag.type==='dshelf'){
+    var steps=Math.round(dsy/SNAP);
+    var dz=syToZ(steps*SNAP);
+    var DH=drag.DH;
+    var newFrac=drag.startFrac+dz/DH;
+    var idx=drag.idx;
+    var n=sc.dShelfFracs.length;
+    var sorted=sc.dShelfFracs.map(function(f,i){return{f:f,i:i};}).sort(function(a,b){return b.f-a.f;});
+    var rank=0; for(var r=0;r<sorted.length;r++){ if(sorted[r].i===idx){rank=r;break;} }
+    var hi=rank>0              ? sorted[rank-1].f-0.02 : 1.0;
+    var lo=rank<sorted.length-1 ? sorted[rank+1].f+0.02 : 0.0;
+    sc.dShelfFracs[idx]=Math.max(lo,Math.min(hi,newFrac));
+  }
+
+  redraw();
+}
+
+function onUp(){ drag=null; }
+
+var svg=document.getElementById('svgMain');
+svg.addEventListener('mousedown',onDown);
+svg.addEventListener('touchstart',onDown,{passive:false});
+window.addEventListener('mousemove',onMove);
+window.addEventListener('touchmove',onMove,{passive:false});
+window.addEventListener('mouseup',onUp);
+window.addEventListener('touchend',onUp);
+
+/* reset on structural change */
+['iN','iH','iUH','iDH','iUN','iDN'].forEach(function(id){
+  document.getElementById(id).addEventListener('change',function(){
+    sc.shelfFracs=[]; sc.uBoxFrac=null; sc.dBoxFrac=null;
+    sc.uShelfFracs=[]; sc.dShelfFracs=[];
+    update(true);
+  });
+});
+
+update(true);
+</script>
+</body>
+</html>
